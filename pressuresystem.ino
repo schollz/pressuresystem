@@ -44,8 +44,9 @@ void loop(void) {
       if (sdata.indexOf("voltage") > -1) {
         sdata.remove(0, 7);
         float newVal = sdata.toFloat();
+        Serial.println(newVal);
         // set voltage
-        float newVoltage = round(910.0 * newVal);
+        float newVoltage = round(4095.0/3.34/2.0* newVal);
         if (newVoltage > 4095) {
           newVoltage = 4095;
         }
