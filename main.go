@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -9,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/schollz/logger"
-	"github.com/schollz/miti/src/log"
+	log "github.com/schollz/logger"
 	"github.com/tarm/serial"
+	stserial "go.bug.st/serial.v1"
 )
 
 var serialConfig *serial.Config
@@ -19,10 +21,10 @@ var s *serial.Port
 var mu sync.Mutex
 
 func main() {
-	logger.SetLevel("debug")
+	log.SetLevel("debug")
 	err := run()
 	if err != nil {
-		logger.Error(err)
+		log.Error(err)
 	}
 }
 
@@ -32,16 +34,19 @@ func run() (err error) {
 	signal.Notify(csig, os.Interrupt)
 	go func() {
 		for sig := range csig {
-			logger.Debug("shutdown")
-			logger.Debug(sig)
-			write(s, "voltage0")
-			write(s, "sol1off")
-			write(s, "sol2off")
-			s.Close()
+			log.Debug("shutdown")
+			log.Debug(sig)
+			if s != nil {
+				write(s, "voltage0")
+				write(s, "sol1off")
+				write(s, "sol2off")
+				s.Close()
+			}
 			os.Exit(1)
 		}
 	}()
 
+	log.Info("running on port 8080")
 	http.HandleFunc("/", handler)
 	http.ListenAndServe(":8080", nil)
 
@@ -87,7 +92,7 @@ func run() (err error) {
 	// 	}
 	// 	err = write(s, msg)
 	// 	if err != nil {
-	// 		logger.Error(err)
+	// 		log.Error(err)
 	// 		c.JSON(200, gin.H{
 	// 			"success": false,
 	// 			"message": err.Error(),
@@ -97,7 +102,7 @@ func run() (err error) {
 	// 	if msg == "read" {
 	// 		reply, err := read(s)
 	// 		if err != nil {
-	// 			logger.Error(err)
+	// 			log.Error(err)
 	// 			c.JSON(200, gin.H{
 	// 				"success": false,
 	// 				"message": err.Error(),
@@ -114,7 +119,7 @@ func run() (err error) {
 	// 		})
 	// 	}
 	// })
-	// logger.Infof("running on port 8080")
+	// log.Infof("running on port 8080")
 
 	return
 }
@@ -130,31 +135,118 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("%v %v %v %s", r.RemoteAddr, r.Method, r.URL.Path, time.Since(t))
 }
 
+type Response struct {
+	Message string
+	Success bool
+	Ports   []string
+}
+
+func writeJSON(re Response, w http.ResponseWriter, r *http.Request) (err error) {
+	b, err := json.Marshal(re)
+	if err != nil {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+	return
+}
+
 // handle is the function for the main routing logic of share.
 func handle(w http.ResponseWriter, r *http.Request) (err error) {
-	if strings.HasPrefix(r.URL.Path, "/open") {
-
+	jsonData := true
+	var re Response
+	defer func() {
+		if jsonData {
+			if err != nil {
+				re.Message = err.Error()
+			}
+			re.Success = err == nil
+			err = writeJSON(re, w, r)
+		}
+	}()
+	if strings.HasPrefix(r.URL.Path, "/COM") {
+		if s != nil {
+			s.Flush()
+			s.Close()
+			s = nil
+		}
+		com := strings.TrimPrefix(r.URL.Path, "/")
+		serialConfig = &serial.Config{Name: com, Baud: 9600, ReadTimeout: time.Second * 1}
+		s, err = serial.OpenPort(serialConfig)
+		if err != nil {
+			s = nil
+			return
+		}
+		err = s.Flush()
+		if err != nil {
+			return
+		}
+		re.Message = "connected"
+	} else if strings.HasPrefix(r.URL.Path, "/sol") || strings.HasPrefix(r.URL.Path, "/voltage") {
+		if s == nil {
+			err = fmt.Errorf("no com port!")
+			return
+		}
+		err = write(s, strings.TrimPrefix(r.URL.Path, "/"))
+		re.Message = strings.TrimPrefix(r.URL.Path, "/")
+	} else if strings.HasPrefix(r.URL.Path, "/read") {
+		if s == nil {
+			err = fmt.Errorf("no com port!")
+			return
+		}
+		err = write(s, "read")
+		if err != nil {
+			return
+		}
+		re.Message, err = read(s)
+		re.Message = strings.TrimSpace(re.Message)
+	} else if strings.HasPrefix(r.URL.Path, "/stop") {
+		if s != nil {
+			write(s, "voltage0")
+			write(s, "sol1off")
+			write(s, "sol2off")
+			s.Flush()
+			s.Close()
+		}
+		s = nil
+		re.Message = "stopped"
+	} else if strings.HasPrefix(r.URL.Path, "/coms") {
+		re.Ports, err = stserial.GetPortsList()
+		re.Message = "found ports"
 	} else {
-		page = "assets/" + strings.TrimPrefix(page, "/static/")
-		if strings.Contains(page, ".js") {
+		jsonData = false
+		p := r.URL.Path
+		if p == "/" {
+			p = "/static/index.html"
+		}
+		p = strings.TrimPrefix(p, "/")
+		if strings.Contains(p, ".js") {
 			w.Header().Set("Content-Type", "text/javascript")
-		} else if strings.Contains(page, ".css") {
+		} else if strings.Contains(p, ".css") {
 			w.Header().Set("Content-Type", "text/css")
-		} else if strings.Contains(page, ".png") {
+		} else if strings.Contains(p, ".png") {
 			w.Header().Set("Content-Type", "image/png")
-		} else if strings.Contains(page, ".json") {
+		} else if strings.Contains(p, ".json") {
 			w.Header().Set("Content-Type", "application/json")
 		} else {
 			w.Header().Set("Content-Type", "text/html")
 		}
-		w.Write(b)
+		var b []byte
+		b, err = Asset(p)
+		// b, err = ioutil.ReadFile(p)
+		if err != nil {
+			log.Error(err)
+		} else {
+			_, err = w.Write(b)
+		}
 	}
+	return
 }
 
 func write(s *serial.Port, data string) (err error) {
 	mu.Lock()
 	defer mu.Unlock()
-	logger.Tracef("writing '%s'", data)
+	log.Tracef("writing '%s'", data)
 	_, err = s.Write([]byte(data + "\n"))
 	if err != nil {
 		return
@@ -164,13 +256,14 @@ func write(s *serial.Port, data string) (err error) {
 }
 
 func read(s *serial.Port) (reply string, err error) {
-	// logger.Debug("locking")
+	// log.Debug("locking")
 	// mu.Lock()
 	// defer func() {
 	// 	mu.Unlock()
-	// 	logger.Debug("unlocking")
+	// 	log.Debug("unlocking")
 	// }()
 	for {
+		log.Trace("waiting for byte")
 		buf := make([]byte, 128)
 		var n int
 		n, err = s.Read(buf)
@@ -182,6 +275,6 @@ func read(s *serial.Port) (reply string, err error) {
 			break
 		}
 	}
-	logger.Tracef("read '%s'", strings.TrimSpace(reply))
+	log.Tracef("read '%s'", strings.TrimSpace(reply))
 	return
 }
