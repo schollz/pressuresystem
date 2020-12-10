@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +14,14 @@ import (
 	"github.com/tarm/serial"
 )
 
+var mu sync.Mutex
+
 func main() {
 	logger.SetLevel("debug")
-	run()
+	err := run()
+	if err != nil {
+		logger.Error(err)
+	}
 }
 
 func run() (err error) {
@@ -26,6 +32,7 @@ func run() (err error) {
 		err = errors.Wrap(err, "no com port")
 		return
 	}
+	s.Flush()
 	defer s.Close()
 
 	csig := make(chan os.Signal, 1)
@@ -43,7 +50,8 @@ func run() (err error) {
 	}()
 
 	r := gin.Default()
-	r.GET("/", func(c *gin.Context) {
+	r.StaticFile("/", "./index.html")
+	r.GET("/api", func(c *gin.Context) {
 		msg := c.DefaultQuery("msg", "")
 		if msg == "" {
 			c.JSON(200, gin.H{
@@ -61,19 +69,25 @@ func run() (err error) {
 			})
 			return
 		}
-		reply, err := read(s)
-		if err != nil {
-			logger.Error(err)
+		if msg == "read" {
+			reply, err := read(s)
+			if err != nil {
+				logger.Error(err)
+				c.JSON(200, gin.H{
+					"success": false,
+					"message": err.Error(),
+				})
+				return
+			}
 			c.JSON(200, gin.H{
-				"success": false,
-				"message": err.Error(),
+				"success": true,
+				"message": strings.TrimSpace(reply),
 			})
-			return
+		} else {
+			c.JSON(200, gin.H{
+				"success": true,
+			})
 		}
-		c.JSON(200, gin.H{
-			"success": true,
-			"message": strings.TrimSpace(reply),
-		})
 	})
 	logger.Infof("running on port 8080")
 
@@ -82,7 +96,9 @@ func run() (err error) {
 	return
 }
 func write(s *serial.Port, data string) (err error) {
-	logger.Debugf("writing '%s'", data)
+	mu.Lock()
+	defer mu.Unlock()
+	logger.Tracef("writing '%s'", data)
 	_, err = s.Write([]byte(data + "\n"))
 	if err != nil {
 		return
@@ -92,7 +108,12 @@ func write(s *serial.Port, data string) (err error) {
 }
 
 func read(s *serial.Port) (reply string, err error) {
-	logger.Debugf("reading")
+	// logger.Debug("locking")
+	// mu.Lock()
+	// defer func() {
+	// 	mu.Unlock()
+	// 	logger.Debug("unlocking")
+	// }()
 	for {
 		buf := make([]byte, 128)
 		var n int
@@ -105,6 +126,6 @@ func read(s *serial.Port) (reply string, err error) {
 			break
 		}
 	}
-	logger.Debugf("read '%s'", strings.TrimSpace(reply))
+	logger.Tracef("read '%s'", strings.TrimSpace(reply))
 	return
 }

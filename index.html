@@ -1,0 +1,247 @@
+<html>
+
+<head>
+    <style>
+        body {
+    	font-size: 1.5em;
+        font-family: calibri;
+    }
+
+        .description {
+        margin-top: 50px;
+        text-align: left;
+        font-family: calibri;
+        font-size: 16px;
+        color: gray;
+    }
+
+    a:link,
+    a:visited,
+    a:active {
+        color: #4F81BC;
+    }
+     /* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .1s;
+  transition: .1s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .1s;
+  transition: .1s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+} 
+.comp {
+	padding: 0.5em;
+	text-align: center;
+	margin: auto;
+}
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="comp">
+            <input type="checkbox" id="solenoid1" v-model="solenoid1">
+            <label for="solenoid1">Solenoid 1</label>
+            <label for="solenoid1timer" style="margin-left:2em;">Timer (s)</label>
+            <input v-model.number="solenoid1timer" id="solenoid1timer" type="number" style="width:4em;">
+            <button v-on:click=solenoid1timerstart>Start</button>
+        </div>
+        <div class="comp">
+            <input type="checkbox" id="solenoid2" v-model="solenoid2">
+            <label for="solenoid2">Solenoid 2</label>
+            <label for="solenoid2timer" style="margin-left:2em;">Timer (s)</label>
+            <input v-model.number="solenoid2timer" id="solenoid2timer" type="number" style="width:4em;">
+            <button v-on:click=solenoid2timerstart>Start</button>
+        </div>
+        <div class="comp">
+            <label for="pressureSet">Pressure (psi)</label>
+            <input v-model.number="pressureSet" id="pressureSet" type="number" min=0 max=10 step=0.1>
+            <button v-on:click=pressureSetUpdate>Update</button>
+        </div>
+    </div>
+    <div id="chartContainer" style="height: 360px; width: 100%;padding-top: 2em;"></div>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js" integrity="sha512-FJ2OYvUIXUqCcPf1stu+oTBlhn54W0UisZB/TNrZaVMHHhYvLBV9jMbvJYtvDe5x/WVaoXZ6KB+Uqe5hT2vlyA==" crossorigin="anonymous"></script>
+    <script>
+    var app = new Vue({
+        el: '#app',
+        data: {
+            message: 'Hello Vue!',
+            solenoid1: false,
+            solenoid1timer: 0,
+            solenoid1timerT: null,
+            solenoid2: false,
+            solenoid2timer: 0,
+            solenoid2timerT: null,
+            pressureSet: 0,
+        },
+        methods: {
+            solenoid1Tick: function() {
+                this.solenoid1timer -= 0.1;
+                if (this.solenoid1timer <= 0.09) {
+                    clearInterval(this.solenoid1timerT);
+                    this.solenoid1timerT = null;
+                    this.solenoid1timer = 0;
+                    this.solenoid1 = false;
+                }
+            },
+            solenoid1timerstart: function() {
+                if (this.solenoid1timer > 0 && this.solenoid1timerT == null) {
+                    this.solenoid1 = true;
+                    this.solenoid1timerT = setInterval(this.solenoid1Tick, 100);
+                }
+            },
+            solenoid2Tick: function() {
+                this.solenoid2timer -= 0.1;
+                if (this.solenoid2timer <= 0.09) {
+                    clearInterval(this.solenoid2timerT);
+                    this.solenoid2timerT = null;
+                    this.solenoid2timer = 0;
+                    this.solenoid2 = false;
+                }
+            },
+            solenoid2timerstart: function() {
+                if (this.solenoid2timer > 0 && this.solenoid2timerT == null) {
+                    this.solenoid2 = true;
+                    this.solenoid2timerT = setInterval(this.solenoid2Tick, 100);
+                }
+            },
+            pressureSetUpdate: function() {
+                val = this.pressureSet;
+                if (val <= 10 && val >= 0) {
+                    voltage = val / 3;
+                    voltage = voltage.toFixed(2);
+                    $.get(`/api?msg=voltage${voltage}`, function(data) {
+                        console.log(data)
+                    });
+                }
+            },
+        },
+        watch: {
+            solenoid1: function(val) {
+                console.log(`solenoid 1 ${val}`);
+                if (val) {
+                    $.get("/api?msg=sol1on", function(data) {
+                        console.log(data)
+                    });
+                } else {
+                    $.get("/api?msg=sol1off", function(data) {
+                        console.log(data)
+                    });
+                }
+            },
+            solenoid2: function(val) {
+                console.log(`solenoid 2 ${val}`);
+                if (val) {
+                    $.get("/api?msg=sol2on", function(data) {
+                        console.log(data)
+                    });
+                } else {
+                    $.get("/api?msg=sol2off", function(data) {
+                        console.log(data)
+                    });
+                }
+            },
+        }
+    })
+    window.onload = function() {
+        var dps = []; // dataPoints
+        var instance = (new Date()).getTime();
+        var chart = new CanvasJS.Chart("chartContainer", {
+            title: {
+                text: "Current pressure"
+            },
+            axisX: {
+                title: "Time",
+                valueFormatString: "hh:mm:ss"
+            },
+
+            axisY: {
+                title: "PSI",
+            },
+            data: [{
+                type: "spline",
+                xValueType: "dateTime",
+                dataPoints: dps
+            }]
+        });
+
+        var updateInterval = 500;
+        var maxDataLength = 100; // number of dataPoints after which the series shifts
+        var time = new Date();
+        var updateCount = 0;
+        var updateChart = function() {
+            if (dps.length > maxDataLength) {
+                dps.shift();
+            }
+            chart.render();
+        };
+
+        //update chart after specified time.
+        setInterval(function() {
+            $.get("/api?msg=read", function(data) {
+                console.log(data)
+                var y = parseFloat(data["message"]) / 1023 * 5.0 * 2 * 3;
+                if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
+            });
+            updateChart();
+        }, updateInterval);
+    }
+    </script>
+</body>
+
+</html>
