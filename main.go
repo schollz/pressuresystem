@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -44,6 +45,10 @@ func run() (err error) {
 			}
 			os.Exit(1)
 		}
+	}()
+
+	go func() {
+		exec.Command("rundll32", "url.dll,FileProtocolHandler", "http://localhost:8080").Start()
 	}()
 
 	log.Info("running on port 8080")

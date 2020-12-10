@@ -288,7 +288,7 @@ input:checked + .slider:before {
                         var y = parseFloat(data["Message"]) / 1023 * 5.0 * 2 * 3;
                         if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
                     } else {
-                        app.message = data["Message"];
+                        console.log(data);
                     }
                 });
                 updateChart();
