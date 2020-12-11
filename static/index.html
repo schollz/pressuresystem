@@ -285,7 +285,12 @@ input:checked + .slider:before {
                 $.get("/read", function(data) {
                     // console.log(data)
                     if (data["Success"]) {
-                        var y = parseFloat(data["Message"]) / 1023 * 5.0 * 2 * 3;
+                        console.log(data["Message"]);
+                        var volts = parseFloat(data["Message"]) / 1023 * 5.0;
+                        var volts_before_divider = volts * 2;
+                        var psi = volts_before_divider * 3;
+                        psi = (1.0217 * psi + 0.0899);
+                        var y = psi;
                         if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
                     } else {
                         console.log(data);

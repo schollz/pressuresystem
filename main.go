@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -237,8 +238,8 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 			w.Header().Set("Content-Type", "text/html")
 		}
 		var b []byte
-		b, err = Asset(p)
-		// b, err = ioutil.ReadFile(p)
+		// b, err = Asset(p)
+		b, err = ioutil.ReadFile(p)
 		if err != nil {
 			log.Error(err)
 		} else {
