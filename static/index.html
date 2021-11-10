@@ -103,6 +103,12 @@ input:checked + .slider:before {
             </select>
         </div>
         <div class="comp">
+            <input type="checkbox" id="flipflop" v-model="flipflop">
+            <label for="flipflop">flipflop</label>
+            <label for="flipfloptimer" style="margin-left:2em;">Timer (s)</label>
+            <input v-model.number="flipfloptimer" id="flipfloptimer" type="number" style="width:4em;">
+        </div>
+        <div class="comp">
             <input type="checkbox" id="solenoid1" v-model="solenoid1">
             <label for="solenoid1">Solenoid 1</label>
             <label for="solenoid1timer" style="margin-left:2em;">Timer (s)</label>
@@ -131,6 +137,8 @@ input:checked + .slider:before {
         el: '#app',
         data: {
             message: 'Hello Vue!',
+            flipflop: false,
+            flipfloptimer: 0,
             solenoid1: false,
             solenoid1timer: 0,
             solenoid1timerT: null,
@@ -154,12 +162,12 @@ input:checked + .slider:before {
                 if (this.started) {
                     this.message = "starting";
                     $.get("/" + this.selectedCom, function(data) {
-                        console.log(data);
+                        // console.log(data);
                         _this.message = data["Message"];
                     });
                 } else {
                     $.get("/stop", function(data) {
-                        console.log(data);
+                        // console.log(data);
                         _this.message = data["Message"];
                     });
                     this.message = "stopping";
@@ -172,6 +180,11 @@ input:checked + .slider:before {
                     this.solenoid1timerT = null;
                     this.solenoid1timer = 0;
                     this.solenoid1 = false;
+                    // flip flop
+                    if (this.flipflop && this.flipfloptimer > 0) {
+                        this.solenoid2timer=this.flipfloptimer;
+                        this.solenoid2timerstart();                        
+                    }
                 }
             },
             solenoid1timerstart: function() {
@@ -183,10 +196,16 @@ input:checked + .slider:before {
             solenoid2Tick: function() {
                 this.solenoid2timer -= 0.1;
                 if (this.solenoid2timer <= 0.09) {
+                    console.log("solenoid 2 timer done");
                     clearInterval(this.solenoid2timerT);
                     this.solenoid2timerT = null;
                     this.solenoid2timer = 0;
                     this.solenoid2 = false;
+                    // flip flop
+                    if (this.flipflop && this.flipfloptimer > 0) {
+                        this.solenoid1timer=this.flipfloptimer;
+                        this.solenoid1timerstart();                        
+                    }
                 }
             },
             solenoid2timerstart: function() {
@@ -201,7 +220,7 @@ input:checked + .slider:before {
                     voltage = val / 3;
                     voltage = voltage.toFixed(2);
                     $.get(`/voltage${voltage}`, function(data) {
-                        console.log(data)
+                        // console.log(data)
                     });
                 }
             },
@@ -209,37 +228,37 @@ input:checked + .slider:before {
         mounted: function() {
             _this = this;
             $.get("/coms", function(data) {
-                console.log(data)
+                // console.log(data)
                 _this.options = data.Ports;
             });
         },
         watch: {
             solenoid1: function(val) {
                 _this = this;
-                console.log(`solenoid 1 ${val}`);
+                // console.log(`solenoid 1 ${val}`);
                 if (val) {
                     $.get("/sol1on", function(data) {
-                        console.log(data)
+                        // console.log(data)
                         _this.message = data["Message"];
                     });
                 } else {
                     $.get("/sol1off", function(data) {
-                        console.log(data)
+                        // console.log(data)
                         _this.message = data["Message"];
                     });
                 }
             },
             solenoid2: function(val) {
                 _this = this;
-                console.log(`solenoid 2 ${val}`);
+                // console.log(`solenoid 2 ${val}`);
                 if (val) {
                     $.get("/sol2on", function(data) {
-                        console.log(data)
+                        // console.log(data)
                         _this.message = data["Message"];
                     });
                 } else {
                     $.get("/sol2off", function(data) {
-                        console.log(data)
+                        // console.log(data)
                         _this.message = data["Message"];
                     });
                 }
@@ -285,7 +304,7 @@ input:checked + .slider:before {
                 $.get("/read", function(data) {
                     // console.log(data)
                     if (data["Success"]) {
-                        console.log(data["Message"]);
+                        // console.log(data["Message"]);
                         var volts = parseFloat(data["Message"]) / 1023 * 5.0;
                         var volts_before_divider = volts * 2;
                         var psi = volts_before_divider * 3;
@@ -293,7 +312,7 @@ input:checked + .slider:before {
                         var y = psi;
                         if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
                     } else {
-                        console.log(data);
+                        // console.log(data);
                     }
                 });
                 updateChart();
