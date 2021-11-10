@@ -3,7 +3,9 @@ module github.com/schollz/pressuresystem
 go 1.14
 
 require (
+	github.com/RobinUS2/golang-moving-average v1.0.0
 	github.com/creack/goselect v0.1.1 // indirect
+	github.com/gorilla/websocket v1.4.2
 	github.com/schollz/logger v1.2.0
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	go.bug.st/serial.v1 v0.0.0-20191202182710-24a6610f0541

@@ -133,6 +133,7 @@ input:checked + .slider:before {
     <script src="/static/jquery-3.5.1.min.js"></script>
     <script src="/static/canvasjs.min.js"></script>
     <script>
+    var socket;
     var app = new Vue({
         el: '#app',
         data: {
@@ -265,8 +266,8 @@ input:checked + .slider:before {
             },
         }
     })
+    var dps = []; // dataPoints
     window.onload = function() {
-        var dps = []; // dataPoints
         var instance = (new Date()).getTime();
         var chart = new CanvasJS.Chart("chartContainer", {
             title: {
@@ -287,7 +288,7 @@ input:checked + .slider:before {
             }]
         });
 
-        var updateInterval = 100;
+        var updateInterval = 150;
         var maxDataLength = 100; // number of dataPoints after which the series shifts
         var time = new Date();
         var updateCount = 0;
@@ -301,24 +302,55 @@ input:checked + .slider:before {
         //update chart after specified time.
         setInterval(function() {
             if (app.started) {
-                $.get("/read", function(data) {
-                    // console.log(data)
-                    if (data["Success"]) {
-                        // console.log(data["Message"]);
-                        var volts = parseFloat(data["Message"]) / 1023 * 5.0;
-                        var volts_before_divider = volts * 2;
-                        var psi = volts_before_divider * 3;
-                        psi = (1.0217 * psi + 0.0899);
-                        var y = psi;
-                        if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
-                    } else {
-                        // console.log(data);
-                    }
-                });
+                // $.get("/read", function(data) {
+                //     // console.log(data)
+                //     if (data["Success"]) {
+                //         // console.log(data["Message"]);
+
+                //     } else {
+                //         // console.log(data);
+                //     }
+                // });
+                socket.send(JSON.stringify({ msg: "read"}));
                 updateChart();
             }
         }, updateInterval);
     }
+
+
+
+    const socketMessageListener = (e) => {
+        let dat=JSON.parse(e.data);
+        if (dat['msg']=='data') {
+            var volts = parseFloat(dat["data"]) / 1023 * 5.0;
+            var volts_before_divider = volts * 2;
+            var psi = volts_before_divider * 3;
+            psi = (1.0217 * psi + 0.0899);
+            var y = psi;
+            if (y < 15) { dps.push({ x: (new Date()), y: y, }); }
+
+        }
+    };
+    const socketOpenListener = (e) => {
+        console.log('Connected');
+    };
+    const socketErrorListener = (e) => {
+        console.error(e);
+    }
+    const socketCloseListener = (e) => {
+        if (socket) {
+            console.log('Disconnected.');
+        }
+        var url = window.origin.replace("http", "ws") + '/ws';
+        socket = new WebSocket(url);
+        socket.onopen = socketOpenListener;
+        socket.onmessage = socketMessageListener;
+        socket.onclose = socketCloseListener;
+        socket.onerror = socketErrorListener;
+    };
+    window.addEventListener('load', (event) => {
+        socketCloseListener();
+    });
     </script>
 </body>
 

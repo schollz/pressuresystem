@@ -8,10 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	movingaverage "github.com/RobinUS2/golang-moving-average"
+	"github.com/gorilla/websocket"
 	log "github.com/schollz/logger"
 	"github.com/tarm/serial"
 	stserial "go.bug.st/serial.v1"
@@ -218,6 +221,8 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 	} else if strings.HasPrefix(r.URL.Path, "/coms") {
 		re.Ports, err = stserial.GetPortsList()
 		re.Message = "found ports"
+	} else if strings.HasPrefix(r.URL.Path, "/ws") {
+		handleWebsocket(w, r)
 	} else {
 		jsonData = false
 		p := r.URL.Path
@@ -282,4 +287,48 @@ func read(s *serial.Port) (reply string, err error) {
 	}
 	log.Tracef("read '%s'", strings.TrimSpace(reply))
 	return
+}
+
+var upgrader = websocket.Upgrader{} // use default options
+
+type Message struct {
+	Msg  string `json:"msg"`
+	Data string `json:"data"`
+}
+
+func handleWebsocket(w http.ResponseWriter, r *http.Request) {
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer c.Close()
+	ma := movingaverage.New(20)
+	for {
+		var msg Message
+		err := c.ReadJSON(&msg)
+		if err != nil {
+			break
+		}
+		if msg.Msg == "read" {
+			time.Sleep(10 * time.Millisecond)
+			err = write(s, "read")
+			if err != nil {
+				log.Error(err)
+				return
+			}
+			var data string
+			data, err = read(s)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+			data = strings.TrimSpace(data)
+			dataVal, _ := strconv.ParseFloat(data, 64)
+			ma.Add(dataVal)
+			err = c.WriteJSON(Message{"data", fmt.Sprintf("%2.1f", ma.Avg())})
+			if err != nil {
+				break
+			}
+		}
+	}
 }
